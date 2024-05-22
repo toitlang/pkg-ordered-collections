@@ -1001,6 +1001,17 @@ class OrderedDeque extends Deque:
         --if-absent=: it 
     insert --at=index element
 
+  /**
+  Returns a list of keys, without removing them from the collection.
+  */
+  // TODO: The Deque should have to-list, in which case we would not need this.
+  to-list -> List:
+    result := List size
+    index := 0
+    do: | key |
+      result[index++] = key
+    return result
+
 /**
 A set of keys.
 The objects used as keys must be $Comparable and immutable in the sense

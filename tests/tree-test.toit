@@ -198,6 +198,15 @@ test2 --identity/bool=true [create-tree] [create-item] [verify-item] -> none:
     expect-equals 95 tree.size
     expect (not tree.is-empty)
 
+  list1 := tree1.to-list
+  list2 := tree1.to-list
+  list3 := tree1.to-list
+  list1[1] = "no-alias"
+  list2[1] = "no-alias"
+  list3[1] = "no-alias"
+  expect-equals (list1.stringify) (list2.stringify)
+  expect-equals (list3.stringify) (list2.stringify)
+
   expect: tree1.test-equals_ tree2
   expect: tree1.test-equals_ tree3
   expect: tree3.test-equals_ tree2
