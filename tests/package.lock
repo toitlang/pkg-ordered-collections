@@ -1,1 +1,5 @@
-# Toit Lock File.
+prefixes:
+  ordered-collections: ..
+packages:
+  ..:
+    path: ..
