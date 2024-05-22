@@ -21,6 +21,9 @@ main:
   test-set: SplaySet
   test-set: RedBlackSet
   test-set: DequeSet
+  test-lightweight: SplaySet
+  test-lightweight: RedBlackSet
+  test-lightweight: DequeSet
   bench false SplayNodeTree "splay": | us/int | SplayTimeout us LAMBDA
   bench false RedBlackNodeTree "red-black": | us/int | RBTimeout us LAMBDA
   bench true SplayNodeTree "splay": | us/int | SplayTimeout us LAMBDA
@@ -172,12 +175,12 @@ test2 --identity/bool=true [create-tree] [create-item] [verify-item] -> none:
       tree.add-all dupes
       dupes.do: tree.remove it
       dupes.do: expect-not (tree.contains it)
-        
+
     expect (tree.contains tree.first)
     expect (tree.contains tree.last)
     verify-item.call tree.first
     verify-item.call tree.last
-    tree.any: 
+    tree.any:
       verify-item.call it
       false
     tree.every:
@@ -240,6 +243,53 @@ test-set [create-set] -> none:
   l[1] = "no-alias"
 
   expect-equals "[bar, buzz, fizz, foo]" (set.to-list.stringify)
+
+class HashedString implements Comparable:
+  str/string
+
+  constructor .str:
+
+  compare-to other -> int:
+    if other is string:
+      return str.compare-to other
+    return str.compare-to other.str
+
+  compare-to other [--if-equal] -> int:
+    result/int := compare-to other
+    if result != 0: return result
+    return if-equal.call this other
+
+  stringify -> string:
+    return "'$str'"
+
+/**
+Test that we can use lightweight objects for contains and remove if the
+  the compare-to method of the elements in the set is able to take the
+  lightweight objects as arguments.
+*/
+test-lightweight [create]:
+  set := create.call
+
+  set.add
+      HashedString "foo"
+
+  expect (set.contains "foo")
+  expect-not (set.contains "bar")
+
+  set.add
+      HashedString "bar"
+
+  expect (set.contains "bar")
+  expect-equals "['bar', 'foo']" (set.to-list.stringify)
+
+  set.do: | element/HashedString | null
+
+  set.remove "bar"
+  expect-equals "['foo']" (set.to-list.stringify)
+
+  ("baz/fizz/buzz/y/x".split "/").do: set.add (HashedString it)
+
+  expect-equals "['baz', 'buzz', 'fizz', 'foo', 'x', 'y']" (set.to-list.stringify)
 
 shuffle list/List:
   size := list.size

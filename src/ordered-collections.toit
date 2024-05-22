@@ -115,19 +115,19 @@ class NodeTree extends CollectionBase:
   /**
   Returns either a node that compares equal or a node that is the closest
     parent to a new, correctly placed node.  The block is passed a node and
-    should return a negative integer if the new node should be placed to the
-    left, 0 if there is an exact match, and a positive integer if the new
+    should return a positive integer if the new node should be placed to the
+    left, 0 if there is an exact match, and a negative integer if the new
     node should be placed to the right.
   If the collection is empty, returns null.
   */
   find_ [compare] -> TreeNode?:
     node/TreeNode? := root_ as any
     while node:
-      if (compare.call node) < 0:
+      if (compare.call node) > 0:
         if node.left_ == null:
           return node
         node = node.left_
-      else if (compare.call node) > 0:
+      else if (compare.call node) < 0:
         if node.right_ == null:
           return node
         node = node.right_
@@ -259,29 +259,49 @@ class NodeTree extends CollectionBase:
 
 /// Used to implement $SplaySet.
 class SetSplayNode_ extends SplayNode:
-  value_ /Comparable := ?
+  key_ /Comparable := ?
 
-  constructor .value_:
+  constructor .key_:
 
   compare-to other/SetSplayNode_ -> int:
-    return value_.compare-to other.value_
+    return key_.compare-to other.key_
 
   compare-to other/SetSplayNode_ [--if-equal] -> int:
-    return value_.compare-to other.value_ --if-equal=: | self other |
-      return if-equal.call self.value_ other.value
+    return key_.compare-to other.key_ --if-equal=: | self other |
+      return if-equal.call self.key_ other.value
+
+  stringify -> string:
+    return key_.stringify
+
+/// Used to implement $SplayMap.
+class MapSplayNode_ extends SetSplayNode_:
+  value_ := ?
+
+  constructor key .value_:
+    super key
 
 /// Used to implement $RedBlackSet.
 class SetRedBlackNode_ extends RedBlackNode:
-  value_ /Comparable := ?
+  key_ /Comparable := ?
 
-  constructor .value_:
+  constructor .key_:
 
   compare-to other/SetRedBlackNode_ -> int:
-    return value_.compare-to other.value_
+    return key_.compare-to other.key_
 
   compare-to other/SetRedBlackNode_ [--if-equal] -> int:
-    return value_.compare-to other.value_ --if-equal=: | self other |
-      return if-equal.call self.value_ other.value
+    return key_.compare-to other.key_ --if-equal=: | self other |
+      return if-equal.call self.key_ other.value
+
+  stringify -> string:
+    return key_.stringify
+
+/// Used to implement $RedBlackMap.
+class MapRedBlackNode_ extends SetRedBlackNode_:
+  value_ := ?
+
+  constructor key .value_:
+    super key
 
 /**
 A set of keys.
@@ -303,43 +323,48 @@ class SplaySet extends SplayNodeTree:
   If an equal key is already in this instance, it is overwritten by the new one.
   */
   add key/Comparable -> none:
-    nearest/any := find_: | node/SetSplayNode_ |
-        key.compare-to node.value_
+    add_
+        (: SetSplayNode_ key)
+        (: it.key_.compare-to key)
+        (: | nearest/SetSplayNode_ | nearest.key_ = key)
+
+  add_ [create] [compare] [overwrite] -> none:
+    nearest/any := find_ compare
     if nearest:
-      result := key.compare-to nearest.value_
-      if result == 0:
+      comparison := compare.call nearest
+      if comparison == 0:
         // Equal.  Overwrite.
-        nearest.value_ = key
+        overwrite.call nearest
         splay_ nearest
         return
-      node := SetSplayNode_ key
+      node := create.call
       node.parent_ = nearest
-      if result < 0:
+      if comparison > 0:
         nearest.left_ = node
       else:
         nearest.right_ = node
       size_++
       splay_ node
     else:
-      root_ = SetSplayNode_ key
+      root_ = create.call
       size_ = 1
 
   do [block] -> none:
-    super: block.call it.value_
+    super: block.call it.key_
 
   do --reversed/bool [block] -> none:
     if not reversed: throw "Argument Error"
-    super --reversed: block.call it.value_
+    super --reversed: block.call it.key_
 
   /**
   Whether this instance contains a key equal to the given $key.
   Equality is determined by the compare-to method from $Comparable.
   */
-  contains key/Comparable -> bool:
+  contains key -> bool:
     nearest/any := find_: | node |
-        key.compare-to node.value_
+        node.key_.compare-to key
     if nearest:
-      result := key.compare-to nearest.value_
+      result := nearest.key_.compare-to key
       return result == 0
     return false
 
@@ -357,7 +382,7 @@ class SplaySet extends SplayNodeTree:
   Equality is determined by the compare-to method from $Comparable.
   The key does not need to be present.
   */
-  remove key/Comparable -> none:
+  remove key -> none:
     remove key --if-absent=(: null)
 
   /**
@@ -365,11 +390,11 @@ class SplaySet extends SplayNodeTree:
   Equality is determined by the compare-to method from $Comparable.
   If the key is absent, calls $if-absent with the given key.
   */
-  remove key/Comparable [--if-absent] -> none:
+  remove key [--if-absent] -> none:
     nearest/any := find_: | node |
-        key.compare-to node.value_
+        node.key_.compare-to key
     if nearest:
-      result := key.compare-to nearest.value_
+      result := nearest.key_.compare-to key
       if result == 0:
         super nearest
       else:
@@ -384,6 +409,50 @@ class SplaySet extends SplayNodeTree:
     do: | key |
       result[index++] = key
     return result
+
+/**
+A map of key-value pairs.
+The objects used as keys must be $Comparable and immutable in the sense
+  that they do not change their comparison value while they are in the set.
+Equality of keys is determined by the compare-to method from $Comparable.
+A hash code is not needed for the keys.  Duplicate keys will not be added.
+Iteration is in increasing order of the keys.
+Since this collection bases on a splay tree it is not guaranteed to be
+  efficient for all access patterns, but is believed to be efficient in
+  practice.
+*/
+class SplayMap extends SplaySet:
+  /**
+  Returns the value that corresponds to the given key.
+  The $key can be a light-weight object that can be passed as a
+    parameter to the compare-to method of keys in this set.
+  */
+  operator [] key:
+    find_: | other/MapSplayNode_ |
+      comparison/int := other.key_.compare-to key
+      if comparison == 0:
+        return other.value_
+      comparison  // Block return value.
+    throw "NOT_FOUND"
+
+  /**
+  Updates or adds the value that corresponds to the given key.
+  If you are updating a key-value pair that is already in the map,
+    the given $key can be a light-weight object that can be passed as a
+    parameter to the compare-to method of keys in this set.
+  */
+  operator []= key value -> none:
+    add_
+        (: MapSplayNode_ key value)
+        (: it.key_.compare-to key)
+        (: | nearest/MapSplayNode_ | nearest.value_ = value)
+
+  do [block] -> none:
+    super: block.call it.key_ it.value_
+
+  do --reversed/bool [block] -> none:
+    if reversed != true: throw "Argument Error"
+    super --reversed: block.call it.key_ it.value_
 
 /**
 A set of keys.
@@ -405,46 +474,61 @@ class RedBlackSet extends RedBlackNodeTree:
   If an equal key is already in this instance, it is overwritten by the new one.
   */
   add key/Comparable -> none:
-    nearest/any := find_: | node/SetRedBlackNode_ |
-        key.compare-to node.value_
+    add_
+        (: SetRedBlackNode_ key)
+        (: it.key_.compare-to key)
+        (: | nearest/SetRedBlackNode_ | nearest.key_ = key)
+
+  add_ [create] [compare] [overwrite] -> none:
+    nearest/any := find_ compare
     if nearest:
-      result := key.compare-to nearest.value_
-      if result == 0:
+      comparison := compare.call nearest
+      if comparison == 0:
         // Equal.  Overwrite.
-        nearest.value_ = key
+        overwrite.call nearest
         return
-      node := SetRedBlackNode_ key
+      node := create.call
       insert_ node nearest
       size_++
     else:
-      root_ = SetRedBlackNode_ key
+      root_ = create.call
       size_ = 1
 
   do [block] -> none:
-    super: block.call it.value_
+    super: block.call it.key_
 
   do --reversed/bool [block] -> none:
     if not reversed: throw "Argument Error"
-    super --reversed: block.call it.value_
+    super --reversed: block.call it.key_
 
   /**
   Whether this instance contains a key equal to the given $key.
   Equality is determined by the compare-to method from $Comparable.
+  The key can be a light-weight object that can be passed as a
+    parameter to the compare-to method of keys in this set.
   */
-  contains key/Comparable -> bool:
+  contains key -> bool:
     nearest/any := find_: | node |
-        key.compare-to node.value_
+        node.key_.compare-to key
     if nearest:
-      result := key.compare-to nearest.value_
+      result := nearest.key_.compare-to key
       return result == 0
     return false
 
-  /** Whether this instance contains all elements of $collection. */
+  /**
+  Whether this instance contains all elements of $collection.
+  The elements in the collection can be light-weight objects that can be
+    passed as a parameter to the compare-to method of keys in this set.
+  */
   contains-all collection/Collection -> bool:
     collection.do: if not contains it: return false
     return true
 
-  /** Removes all elements of $collection from this instance. */
+  /**
+  Removes all elements of $collection from this instance.
+  The elements in the collection can be light-weight objects that can be
+    passed as a parameter to the compare-to method of keys in this set.
+  */
   remove-all collection/Collection -> none:
     collection.do: remove it --if-absent=: null
 
@@ -452,20 +536,24 @@ class RedBlackSet extends RedBlackNodeTree:
   Removes a key equal to the given $key from this instance.
   Equality is determined by the compare-to method from $Comparable.
   The key does not need to be present.
+  The key can be a light-weight object that can be passed as a
+    parameter to the compare-to method of keys in this set.
   */
-  remove key/Comparable -> none:
+  remove key -> none:
     remove key --if-absent=(: null)
 
   /**
   Removes a key equal to the given $key from this instance.
   Equality is determined by the compare-to method from $Comparable.
   If the key is absent, calls $if-absent with the given key.
+  The key can be a light-weight object that can be passed as a
+    parameter to the compare-to method of keys in this set.
   */
-  remove key/Comparable [--if-absent] -> none:
+  remove key [--if-absent] -> none:
     nearest/any := find_: | node |
-        key.compare-to node.value_
+        node.key_.compare-to key
     if nearest:
-      result := key.compare-to nearest.value_
+      result := nearest.key_.compare-to key
       if result == 0:
         super nearest
       else:
@@ -480,6 +568,51 @@ class RedBlackSet extends RedBlackNodeTree:
     do: | key |
       result[index++] = key
     return result
+
+/**
+A map of key-value pairs.
+The objects used as keys must be $Comparable and immutable in the sense
+  that they do not change their comparison value while they are in the set.
+Equality of keys is determined by the compare-to method from $Comparable.
+A hash code is not needed for the keys.  Duplicate keys will not be added.
+Iteration is in increasing order of the keys.
+Since this collection is based on a red-black tree it offers O(log n)
+  time for insertion and removal.  Checking for containment and getting
+  the largest and smallest keys are also O(log n) time operations.
+  practice.
+*/
+class RedBlackMap extends RedBlackSet:
+  /**
+  Returns the value that corresponds to the given key.
+  The $key can be a light-weight object that can be passed as a
+    parameter to the compare-to method of keys in this set.
+  */
+  operator [] key:
+    find_: | other/MapRedBlackNode_ |
+      comparison/int := other.key_.compare-to key
+      if comparison == 0:
+        return other.value_
+      comparison  // Block return value.
+    throw "NOT_FOUND"
+
+  /**
+  Updates or adds the value that corresponds to the given key.
+  If you are updating a key-value pair that is already in the map,
+    the given $key can be a light-weight object that can be passed as a
+    parameter to the compare-to method of keys in this set.
+  */
+  operator []= key value -> none:
+    add_
+        (: MapRedBlackNode_ key value)
+        (: it.key_.compare-to key)
+        (: | nearest/MapRedBlackNode_ | nearest.value_ = value)
+
+  do [block] -> none:
+    super: block.call it.key_ it.value_
+
+  do --reversed/bool [block] -> none:
+    if reversed != true: throw "Argument Error"
+    super --reversed: block.call it.key_ it.value_
 
 /**
 A splay tree which self-adjusts to avoid imbalance on average.
@@ -640,7 +773,7 @@ The nodes should implement $Comparable.  The same node cannot be
 To remove a node from the tree, use a reference to the node.
 Since this collection is based on a red-black tree it offers O(log n)
   time for insertion and O(1) amortized time for removal.
-  Getting the largest and smallest elements are also O(log n) time operations.
+Getting the largest and smallest keys are also O(log n) time operations.
 */
 class RedBlackNodeTree extends NodeTree:
   /**
@@ -662,7 +795,7 @@ class RedBlackNodeTree extends NodeTree:
 
   insert_ value/RedBlackNode node/RedBlackNode -> none:
     while true:
-      if (value.compare-to node) < 0:
+      if (node.compare-to value) > 0:
         if node.left_ == null:
           value.parent_ = node
           node.left_ = value
@@ -998,7 +1131,7 @@ class OrderedDeque extends Deque:
     index := index-of
         element
         --binary-compare=: | a b | a.compare-to b
-        --if-absent=: it 
+        --if-absent=: it
     insert --at=index element
 
   /**
@@ -1025,9 +1158,10 @@ This class is efficient if most additions and removals happen near the
 class DequeSet extends Deque:
   /**
   Returns whether the two collections are equal.  May call the compare-to
-    method on every element of the collection.
+    method on every element of the collection.  The $other collection will
+    be indexed into using the [] operator, so that should be efficient.
   */
-  operator == other/DequeSet -> bool:
+  operator == other/List -> bool:
     if size != other.size: return false
     i := 0
     do: | element |
@@ -1041,17 +1175,21 @@ class DequeSet extends Deque:
   /**
   Removes a key equal to the given $key from this instance.
   Equality is determined by the compare-to method from $Comparable.
-  The key does not need to be present.
+  The $key does not need to be present.
+  The $key can be a light-weight object that can be passed as a
+    parameter to the compare-to method of keys in this set.
   */
-  remove key/Comparable -> none:
+  remove key -> none:
     remove key --if-absent=(: null)
 
   /**
   Removes a key equal to the given $key from this instance.
   Equality is determined by the compare-to method from $Comparable.
   If the key is absent, calls $if-absent with the given key.
+  The $key can be a light-weight object that can be passed as a
+    parameter to the compare-to method of keys in this set.
   */
-  remove key/Comparable [--if-absent] -> none:
+  remove key [--if-absent] -> none:
     index := index-of
         key
         --binary-compare=: | a b | a.compare-to b
@@ -1060,7 +1198,11 @@ class DequeSet extends Deque:
           return
     remove --at=index
 
-  /** Removes all elements of $collection from this instance. */
+  /**
+  Removes all elements of $collection from this instance.
+  The elements of the collection can be light-weight objects that can be passed
+    as a parameter to the compare-to method of keys in this set.
+  */
   remove-all collection/Collection -> none:
     collection.do: remove it --if-absent=: null
 
@@ -1083,15 +1225,21 @@ class DequeSet extends Deque:
   /**
   Return whether this instance contains a key equal to the given $key.
   Equality is determined by the compare-to method from $Comparable.
+  The $key can be a light-weight object that can be passed as a
+    parameter to the compare-to method of keys in this set.
   */
-  contains key/Comparable -> bool:
+  contains key -> bool:
     index-of
         key
         --binary-compare=: | a b | a.compare-to b
         --if-absent=: return false
     return true
 
-  /** Whether this instance contains all elements of $collection. */
+  /**
+  Whether this instance contains all elements of $collection.
+  The elements of the collection can be light-weight objects that can be passed
+    as a parameter to the compare-to method of keys in this set.
+  */
   contains-all collection/Collection -> bool:
     collection.do: if not contains it: return false
     return true
