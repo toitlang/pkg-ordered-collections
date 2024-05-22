@@ -21,6 +21,8 @@ main:
   test-set: SplaySet
   test-set: RedBlackSet
   test-set: DequeSet
+  test-map: SplayMap
+  test-map: RedBlackMap
   test-lightweight: SplaySet
   test-lightweight: RedBlackSet
   test-lightweight: DequeSet
@@ -243,8 +245,29 @@ test-set [create-set] -> none:
   l[1] = "no-alias"
 
   expect-equals "[bar, buzz, fizz, foo]" (set.to-list.stringify)
+  expect-equals "{bar, buzz, fizz, foo}" (set.stringify)
 
-class HashedString implements Comparable:
+  1000.repeat: | i |
+    set.add "$i"
+  big-string := set.stringify
+  expect-equals "83, 830, 831, 832, 833, 834..." big-string[big-string.size - 30..]
+
+test-map [create-map] -> none:
+  map := create-map.call
+
+  map["foo"] = "bar"
+
+  expect-equals "{foo: bar}" (map.stringify)
+
+  5000.repeat: | i |
+    map["$i"] = "baz"
+
+  big-string := map.stringify
+  expect-equals "{0: baz, 1: baz, 10: baz, 100:" big-string[..30]
+  expect-equals "..." big-string[big-string.size - 30..]
+
+
+class BoxedString implements Comparable:
   str/string
 
   constructor .str:
@@ -270,26 +293,32 @@ Test that we can use lightweight objects for contains and remove if the
 test-lightweight [create]:
   set := create.call
 
-  set.add
-      HashedString "foo"
+  expect-equals null (set.get "foo")
+
+  foo-boxed := BoxedString "foo"
+  set.add foo-boxed
+
+  expect-equals foo-boxed (set.get "foo")
 
   expect (set.contains "foo")
   expect-not (set.contains "bar")
 
   set.add
-      HashedString "bar"
+      BoxedString "bar"
 
   expect (set.contains "bar")
   expect-equals "['bar', 'foo']" (set.to-list.stringify)
 
-  set.do: | element/HashedString | null
+  set.do: | element/BoxedString | null  // Check the cast works.
 
   set.remove "bar"
   expect-equals "['foo']" (set.to-list.stringify)
 
-  ("baz/fizz/buzz/y/x".split "/").do: set.add (HashedString it)
+  ("baz/fizz/buzz/y/x".split "/").do: set.add (BoxedString it)
 
   expect-equals "['baz', 'buzz', 'fizz', 'foo', 'x', 'y']" (set.to-list.stringify)
+
+  expect-equals "fizz" (set.get "fizz").str
 
 shuffle list/List:
   size := list.size
