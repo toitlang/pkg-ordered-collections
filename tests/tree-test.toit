@@ -27,9 +27,9 @@ main:
   test-set-2: Set
   test-map: SplayMap
   test-map: RedBlackMap
+  test-map-2: Map
   test-map-2: SplayMap
   test-map-2: RedBlackMap
-  test-map-2: Map
   test-lightweight: SplaySet
   test-lightweight: RedBlackSet
   test-lightweight: DequeSet
@@ -287,7 +287,13 @@ test-set-2 [create-set] -> none:
 
   set.add-all ["xylophone", "zoo"]
   expect-equals "{foo, whizz, xylophone, zoo}" set.stringify
+  set2 := set.copy
+  set3 := set.map: it.to-ascii-upper
   set.remove "whizz"
+  expect-equals "{foo, whizz, xylophone, zoo}" set2.stringify
+  expect-equals "{FOO, WHIZZ, XYLOPHONE, ZOO}" set3.stringify
+  expect (set is Set) == (set2 is Set)
+  expect (set is Set) == (set3 is Set)
   expect-equals "{foo, xylophone, zoo}" set.stringify
   expect-equals 3 set.size
   expect-equals "foo/xylophone/zoo/"
@@ -341,8 +347,12 @@ test-map-2 [create-map] -> none:
   map["pferd"] = "fisch"
   expect-equals 3 map.size
   expect-equals "{hest: fisk, horse: fish, pferd: fisch}" map.stringify
+  map2 := map.copy
+  map3 := map.map: | key value | "$key-$value"
   map["pferd"] = "Fisch"
   expect-equals "{hest: fisk, horse: fish, pferd: Fisch}" map.stringify
+  expect-equals "{hest: fisk, horse: fish, pferd: fisch}" map2.stringify
+  expect-equals "{hest: hest-fisk, horse: horse-fish, pferd: pferd-fisch}" map3.stringify
   count := 0
   map.do: | key value |
     count++
@@ -354,10 +364,32 @@ test-map-2 [create-map] -> none:
       expect-equals "Fisch" value
     else:
       throw "Unexpected key: $key"
+  expect-equals "-hest-horse-pferd"
+      map.reduce --initial="": | acc key value | "$acc-$key"
+  expect-equals "hest-horse-pferd"
+      map.reduce --keys: | acc key | "$acc-$key"
+  expect-equals "-hest-horse-pferd"
+      map.reduce --keys --initial="": | acc key | "$acc-$key"
+  expect-equals "fisk-fish-Fisch"
+      map.reduce --values: | acc key | "$acc-$key"
+  expect-equals "-fisk-fish-Fisch"
+      map.reduce --values --initial="": | acc key | "$acc-$key"
   expect-equals 3 count
+  expect
+      map.any: | key value | key.size != value.size
   map.remove "horse"
   expect-equals 2 map.size
   expect-equals "{hest: fisk, pferd: Fisch}" map.stringify
+  expect
+      map.every: | key value | key.size == value.size
+  expect
+      map.every --keys: it.contains "e"
+  expect
+      map.any --keys: it.contains "pf"
+  expect
+      map.every --values: it.contains "i"
+  expect
+      map.any --values: it.contains "Fi"
   map.remove "pferd"
   map["Pferd"] = "Fisch"
   expect (map.contains "hest")

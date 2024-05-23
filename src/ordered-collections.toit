@@ -402,6 +402,14 @@ class SplaySet extends SplayNodeTree_ with ToListMixin_ CollectionMixin SetMixin
     if not reversed: throw "Argument Error"
     super --reversed: block.call it.key_
 
+  map [block] -> SplaySet:
+    result := SplaySet
+    do: result.add (block.call it)
+    return result
+
+  copy -> SplaySet:
+    return map: it
+
 /**
 Common methods that sets and maps have.
 */
@@ -460,7 +468,7 @@ Since this collection bases on a splay tree it is not guaranteed to be
   efficient for all access patterns, but is believed to be efficient in
   practice.
 */
-class SplayMap extends SplayNodeTree_ with SetMapMixin_:
+class SplayMap extends SplayNodeTree_ with SetMapMixin_ MapMixin:
   /**
   Returns the value that corresponds to the given key.
   The $key can be a lightweight object that can be passed as a
@@ -514,6 +522,15 @@ class SplayMap extends SplayNodeTree_ with SetMapMixin_:
     if root_:
       do-reversed_ root_: block.call it.key_ it.value_
 
+  map [block] -> SplayMap:
+    result := SplayMap
+    do: | key value |
+      result[key] = block.call key value
+    return result
+
+  copy -> SplayMap:
+    return map: | _ value | value
+
   empty-string_ -> string: return "{:}"
 
 /**
@@ -548,6 +565,14 @@ class RedBlackSet extends RedBlackNodeTree_ with ToListMixin_ CollectionMixin Se
     if not reversed: throw "Argument Error"
     super --reversed: block.call it.key_
 
+  map [block] -> RedBlackSet:
+    result := RedBlackSet
+    do: result.add (block.call it)
+    return result
+
+  copy -> RedBlackSet:
+    return map: it
+
 /**
 A map of key-value pairs.
 The objects used as keys must be $Comparable and immutable in the sense
@@ -559,7 +584,7 @@ Since this collection is based on a red-black tree it offers O(log n)
   time for insertion and removal.  Checking for containment and getting
   the largest and smallest keys are also O(log n) time operations.
 */
-class RedBlackMap extends RedBlackNodeTree_ with SetMapMixin_:
+class RedBlackMap extends RedBlackNodeTree_ with SetMapMixin_ MapMixin:
   /**
   Returns the value that corresponds to the given key.
   The $key can be a lightweight object that can be passed as a
@@ -612,6 +637,15 @@ class RedBlackMap extends RedBlackNodeTree_ with SetMapMixin_:
     if reversed != true: throw "Argument Error"
     if root_:
       do-reversed_ root_: block.call it.key_ it.value_
+
+  map [block] -> RedBlackMap:
+    result := RedBlackMap
+    do: | key value |
+      result[key] = block.call key value
+    return result
+
+  copy -> RedBlackMap:
+    return map: | _ value | value
 
   empty-string_ -> string: return "{:}"
 
@@ -1328,3 +1362,11 @@ class DequeSet extends Deque:
     // If it's not truncated, replace the trailing ] with a }.
     if square.ends-with "]": square = "$square[.. square.size - 1]}"
     return square
+
+  map [block] -> DequeSet:
+    result := DequeSet
+    do: result.add (block.call it)
+    return result
+
+  copy -> DequeSet:
+    return map: it
