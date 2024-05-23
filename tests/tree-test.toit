@@ -323,6 +323,18 @@ test-map-2 [create-map] -> none:
   expect-equals "{hest: fisk, horse: fish, pferd: fisch}" map.stringify
   map["pferd"] = "Fisch"
   expect-equals "{hest: fisk, horse: fish, pferd: Fisch}" map.stringify
+  count := 0
+  map.do: | key, value |
+    count++
+    if key == "hest":
+      expect-equals "fisk" value
+    else if key == "horse
+      expect-equals "fish" value
+    else if key == "pferd":
+      expect-equals "Fisch" value
+    else:
+      throw "Unexpected key: $key"
+  expect-equals 3 count
   map.remove "horse"
   expect-equals 2 map.size
   expect-equals "{hest: fisk, pferd: Fisch}" map.stringify
