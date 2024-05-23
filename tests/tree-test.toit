@@ -282,6 +282,18 @@ test-set-2 [create-set] -> none:
   set.remove "whizz"
   expect-equals "{foo, xylophone, zoo}" set.stringify
   expect-equals 3 set.size
+  expect-equals "foo/xylophone/zoo/"
+    set.reduce --initial="": | acc item | "$acc$item/"
+  expect-equals "foo-xylophone-zoo"
+    set.reduce: | acc item | "$(acc)-$item"
+  expect
+      set.any: it == "zoo"
+  expect-not
+      set.any: it == "xoo"
+  expect
+      set.every: it is string
+  expect-not
+      set.every: it == "foo"
 
 test-map [create-map] -> none:
   map := create-map.call
@@ -324,11 +336,11 @@ test-map-2 [create-map] -> none:
   map["pferd"] = "Fisch"
   expect-equals "{hest: fisk, horse: fish, pferd: Fisch}" map.stringify
   count := 0
-  map.do: | key, value |
+  map.do: | key value |
     count++
     if key == "hest":
       expect-equals "fisk" value
-    else if key == "horse
+    else if key == "horse":
       expect-equals "fish" value
     else if key == "pferd":
       expect-equals "Fisch" value
@@ -344,6 +356,23 @@ test-map-2 [create-map] -> none:
   expect-not (map.contains "pferd")
   expect (map.contains "Pferd")
   expect-equals 2 map.size
+
+  1000.repeat: map["$it"] = it
+  expect-equals 1002 map.size
+  1000.repeat: expect (map.contains "$it")
+  1000.repeat: expect-equals it map["$it"]
+  map.do: | key value  |
+    expect key is string
+    expect (value is string or value is int)
+    expect-equals value map[key]
+  1000.repeat: map.remove "$it"
+  expect-equals 2 map.size
+  map.remove "Pferd"
+  expect-equals 1 map.size
+  expect-equals "{hest: fisk}" map.stringify
+  map.remove "hest"
+  expect-equals 0 map.size
+  expect-equals "{:}" map.stringify
 
 class BoxedString implements Comparable:
   str/string
