@@ -4,20 +4,33 @@
 
 MAX-PRINT-STRING_ ::= 4000
 
-/**
-Abstract base class for tree-based ordered collections.
-These collections manage objects that imlement $Comparable.
-Internally they maintain a tree structure, meaning that addition runs in
-  O(log n) time and iteration runs in O(n) time.
-Storage requires O(size) space, and stack depths are O(log n) or better.
-*/
 abstract
-class NodeTree extends CollectionBase:
+mixin ToListMixin_:
+  abstract size -> int
+  abstract do [block] -> none
+
+  /**
+  Returns a list of keys, without removing them from the set.
+  */
+  to-list -> List:
+    result := List size
+    index := 0
+    do: | key |
+      result[index++] = key
+    return result
+
+abstract
+class NodeTree_:
+  abstract empty-string_ -> string
+
   root_ /TreeNode? := null
   size_ /int := 0
 
   size -> int:
     return size_
+
+  is-empty -> bool:
+    return root_ == null
 
   do [block] -> none:
     if root_:
@@ -144,8 +157,8 @@ class NodeTree extends CollectionBase:
   Iterates both collections in order, comparing each element, without using
     intermediate storage.
   */
-  test-equals_ other/NodeTree -> bool:
-    if other is not NodeTree: return false
+  test-equals_ other/NodeTree_ -> bool:
+    if other is not NodeTree_: return false
     if other.size != size: return false
     if size == 0: return true
     // Avoids recursion because it can go too deep on the splay tree.
@@ -206,15 +219,26 @@ class NodeTree extends CollectionBase:
   */
   abstract dump -> none
 
-  abstract add element/TreeNode -> none
+  abstract remove element/TreeNode -> none
 
   /**
-  Adds all elements of the given $collection to this instance.
+  Whether this instance contains a key equal to the given $node.
+  Equality is determined by identity.
   */
-  add-all collection/Collection -> none:
-    collection.do: add it
+  contains node/TreeNode -> bool:
+    find_: | other |
+      comparison := other.compare-to node
+      if comparison == 0: return true
+      comparison
+    return false
 
-  abstract remove element/TreeNode -> none
+  /**
+  Whether this instance contains all elements of $collection.
+  Equality is determined by the concrete class's contains method.
+  */
+  contains-all collection/Collection -> bool:
+    collection.do: if not contains it: return false
+    return true
 
   /**
   For debugging purposes, emits a textual representation of the tree,
@@ -249,15 +273,17 @@ class NodeTree extends CollectionBase:
     if to:
       to.parent_ = parent
 
-  /**
-  Returns a list of treenodes, without removing them from the collection.
-  */
-  to-list -> List:
-    result := List size
-    index := 0
-    do: | node/TreeNode |
-      result[index++] = node
-    return result
+  stringify -> string:
+    if size == 0: return empty-string_
+    key-value-strings := []
+    size := 0
+    do_ root_ : | node |
+      key-value-string := node.stringify
+      size += key-value-string.size + 2
+      if size > MAX-PRINT-STRING_:
+        return "{$(key-value-strings.join ", ")..."
+      key-value-strings.add key-value-string
+    return "{$(key-value-strings.join ", ")}"
 
 /// Used to implement $SplaySet.
 class SetSplayNode_ extends SplayNode:
@@ -311,106 +337,13 @@ class MapRedBlackNode_ extends SetRedBlackNode_:
   stringify -> string:
     return "$key_: $value_"
 
-abstract mixin SetMixin_:
-  /**
-  Returns a list of keys, without removing them from the set.
-  */
-  to-list -> List:
-    result := List size
-    index := 0
-    do: | key |
-      result[index++] = key
-    return result
-
+abstract
+mixin SetMixin_:
   abstract size -> int
 
   abstract do [block] -> none
 
-  abstract empty-string_ -> string
-
-  abstract root_ -> any
-
-  abstract do_ node [block] -> none
-
-  stringify -> string:
-    if size == 0: return empty-string_
-    key-value-strings := []
-    size := 0
-    do_ root_ : | node |
-      key-value-string := node.stringify
-      size += key-value-string.size + 2
-      if size > MAX-PRINT-STRING_:
-        return "{$(key-value-strings.join ", ")..."
-      key-value-strings.add key-value-string
-    return "{$(key-value-strings.join ", ")}"
-
-/**
-A set of keys.
-The objects used as keys must be $Comparable and immutable in the sense
-  that they do not change their comparison value while they are in the set.
-Equality is determined by the compare-to method from $Comparable.
-A hash code is not needed for the keys.  Duplicate keys will not be added.
-Iteration is in increasing order of the keys.
-Since this collection bases on a splay tree it is not guaranteed to be
-  efficient for all access patterns, but is believed to be efficient in
-  practice.
-*/
-class SplaySet extends SplayNodeTree with SetMixin_:
-  operator == other/SplaySet -> bool:
-    return test-equals_ other
-
-  /**
-  Adds the given $key to this instance.
-  If an equal key is already in this instance, it is overwritten by the new one.
-  */
-  add key/Comparable -> none:
-    add_
-        (: SetSplayNode_ key)
-        (: it.key_.compare-to key)
-        (: | node/SetSplayNode_ | node.key_ = key)
-
-  add_ [create] [compare] [overwrite] -> SetSplayNode_:
-    nearest/any := find_ compare
-    if nearest:
-      comparison := compare.call nearest
-      if comparison == 0:
-        // Equal.  Overwrite.
-        overwrite.call nearest
-        splay_ nearest
-        return nearest
-      node := create.call
-      node.parent_ = nearest
-      if comparison > 0:
-        nearest.left_ = node
-      else:
-        nearest.right_ = node
-      size_++
-      splay_ node
-      return node
-    else:
-      root_ = create.call
-      size_ = 1
-      return root_ as SetSplayNode_
-
-  do [block] -> none:
-    super: block.call it.key_
-
-  do --reversed/bool [block] -> none:
-    if not reversed: throw "Argument Error"
-    super --reversed: block.call it.key_
-
-  /**
-  Whether this instance contains a key equal to the given $key.
-  Equality is determined by the compare-to method from $Comparable.
-  */
-  contains key -> bool:
-    get key --if-absent=: return false
-    return true
-
-  /** Whether this instance contains all elements of $collection. */
-  contains-all collection/Collection -> bool:
-    collection.do: if not contains it: return false
-    return true
+  abstract find_ [compare] -> TreeNode?
 
   /**
   Returns an element that is equal to the $key, according to the
@@ -431,15 +364,51 @@ class SplaySet extends SplayNodeTree with SetMixin_:
     parameter to the compare-to method of keys in this set.
   */
   get key [--if-absent] -> any:
-    nearest/any := find_: | node |
+    find_: | node |
       comparison/int := node.key_.compare-to key
       if comparison == 0: return node.key_
       comparison  // Block result.
     return if-absent.call key
 
-  /** Removes all elements of $collection from this instance. */
-  remove-all collection/Collection -> none:
-    collection.do: remove it --if-absent=: null
+/**
+A set of keys.
+The objects used as keys must be $Comparable and immutable in the sense
+  that they do not change their comparison value while they are in the set.
+Equality is determined by the compare-to method from $Comparable.
+A hash code is not needed for the keys.  Duplicate keys will not be added.
+Iteration is in increasing order of the keys.
+Since this collection bases on a splay tree it is not guaranteed to be
+  efficient for all access patterns, but is believed to be efficient in
+  practice.
+*/
+class SplaySet extends SplayNodeTree_ with ToListMixin_ CollectionMixin SetMixin_ SetMapMixin_ implements Collection:
+  operator == other/SplaySet -> bool:
+    return test-equals_ other
+
+  /**
+  Adds the given $key to this instance.
+  If an equal key is already in this instance, it is overwritten by the new one.
+  */
+  add key/Comparable -> none:
+    add_
+        (: SetSplayNode_ key)
+        (: it.key_.compare-to key)
+        (: | node/SetSplayNode_ | node.key_ = key)
+
+  do [block] -> none:
+    super: block.call it.key_
+
+  do --reversed/bool [block] -> none:
+    if not reversed: throw "Argument Error"
+    super --reversed: block.call it.key_
+
+/**
+Common methods that sets and maps have.
+*/
+abstract
+mixin SetMapMixin_:
+  abstract find_ [compare] -> TreeNode?
+  abstract remove_ element/SplayNode -> none
 
   /**
   Removes a key equal to the given $key from this instance.
@@ -459,9 +428,24 @@ class SplaySet extends SplayNodeTree with SetMixin_:
       node.key_.compare-to key
     if nearest:
       if (nearest.key_.compare-to key) == 0:
-        super nearest
+        remove_ nearest
       else:
         if-absent.call key
+
+  /**
+  Removes all elements of $collection from this instance.
+  The elements in the collection can be lightweight objects that can be
+    passed as a parameter to the compare-to method of keys in this set.
+  */
+  remove-all collection/Collection -> none:
+    collection.do: remove it --if-absent=: null
+
+  contains key -> bool:
+    find_: | node |
+      comparison/int := node.key_.compare-to key
+      if comparison == 0: return true
+      comparison  // Block result.
+    return false
 
   empty-string_ -> string: return "{}"
 
@@ -476,7 +460,7 @@ Since this collection bases on a splay tree it is not guaranteed to be
   efficient for all access patterns, but is believed to be efficient in
   practice.
 */
-class SplayMap extends SplaySet:
+class SplayMap extends SplayNodeTree_ with SetMapMixin_:
   /**
   Returns the value that corresponds to the given key.
   The $key can be a lightweight object that can be passed as a
@@ -543,7 +527,7 @@ Since this collection is based on a red-black tree it offers O(log n)
   time for insertion and removal.  Checking for containment and getting
   the largest and smallest elements are also O(log n) time operations.
 */
-class RedBlackSet extends RedBlackNodeTree with SetMixin_:
+class RedBlackSet extends RedBlackNodeTree_ with ToListMixin_ CollectionMixin SetMixin_ SetMapMixin_ implements Collection:
   operator == other/RedBlackSet -> bool:
     return test-equals_ other
 
@@ -557,109 +541,12 @@ class RedBlackSet extends RedBlackNodeTree with SetMixin_:
         (: it.key_.compare-to key)
         (: | node/SetRedBlackNode_ | node.key_ = key)
 
-  add_ [create] [compare] [overwrite] -> SetRedBlackNode_:
-    nearest/any := find_ compare
-    if nearest:
-      comparison := compare.call nearest
-      if comparison == 0:
-        // Equal.  Overwrite.
-        overwrite.call nearest
-        return nearest
-      node := create.call
-      insert_ node nearest
-      size_++
-      return node
-    else:
-      root_ = create.call
-      size_ = 1
-      return (root_ as SetRedBlackNode_)
-
   do [block] -> none:
     super: block.call it.key_
 
   do --reversed/bool [block] -> none:
     if not reversed: throw "Argument Error"
     super --reversed: block.call it.key_
-
-  /**
-  Whether this instance contains a key equal to the given $key.
-  Equality is determined by the compare-to method from $Comparable.
-  The key can be a lightweight object that can be passed as a
-    parameter to the compare-to method of keys in this set.
-  */
-  contains key -> bool:
-    get key --if-absent=: return false
-    return true
-
-  /**
-  Whether this instance contains all elements of $collection.
-  The elements in the collection can be lightweight objects that can be
-    passed as a parameter to the compare-to method of keys in this set.
-  */
-  contains-all collection/Collection -> bool:
-    collection.do: if not contains it: return false
-    return true
-
-  /**
-  Returns an element that is equal to the $key, according to the
-    compare-to method of the elements in the set.
-  Returns null if no element in the set is equal to the key.
-  The $key can be a lightweight object that can be passed as a
-    parameter to the compare-to method of keys in this set.
-  */
-  get key -> any:
-    return get key --if-absent=(: null)
-
-  /**
-  Returns an element that is equal to the $key, according to the
-    compare-to method of the elements in the set.
-  Returns the result of calling $if-absent with the given key if no element
-    in the set is equal to the key.
-  The $key can be a lightweight object that can be passed as a
-    parameter to the compare-to method of keys in this set.
-  */
-  get key [--if-absent] -> any:
-    nearest/any := find_: | node |
-      comparison/int := node.key_.compare-to key
-      if comparison == 0: return node.key_
-      comparison  // Block result.
-    return if-absent.call key
-
-  /**
-  Removes all elements of $collection from this instance.
-  The elements in the collection can be lightweight objects that can be
-    passed as a parameter to the compare-to method of keys in this set.
-  */
-  remove-all collection/Collection -> none:
-    collection.do: remove it --if-absent=: null
-
-  /**
-  Removes a key equal to the given $key from this instance.
-  Equality is determined by the compare-to method from $Comparable.
-  The key does not need to be present.
-  The key can be a lightweight object that can be passed as a
-    parameter to the compare-to method of keys in this set.
-  */
-  remove key -> none:
-    remove key --if-absent=(: null)
-
-  /**
-  Removes a key equal to the given $key from this instance.
-  Equality is determined by the compare-to method from $Comparable.
-  If the key is absent, calls $if-absent with the given key.
-  The key can be a lightweight object that can be passed as a
-    parameter to the compare-to method of keys in this set.
-  */
-  remove key [--if-absent] -> none:
-    nearest/any := find_: | node |
-        node.key_.compare-to key
-    if nearest:
-      if (nearest.key_.compare-to key) == 0:
-        super nearest
-      else:
-        if-absent.call key
-
-  empty-string_ -> string: return "{}"
 
 /**
 A map of key-value pairs.
@@ -672,7 +559,7 @@ Since this collection is based on a red-black tree it offers O(log n)
   time for insertion and removal.  Checking for containment and getting
   the largest and smallest keys are also O(log n) time operations.
 */
-class RedBlackMap extends RedBlackSet:
+class RedBlackMap extends RedBlackNodeTree_ with SetMapMixin_:
   /**
   Returns the value that corresponds to the given key.
   The $key can be a lightweight object that can be passed as a
@@ -742,7 +629,7 @@ Since this collection bases on a splay tree it is not guaranteed to be
   efficient for all access patterns, but is believed to be efficient in
   practice.
 */
-class SplayNodeTree extends NodeTree:
+class SplayNodeTree extends SplayNodeTree_ with ToListMixin_ CollectionMixin implements Collection:
   /**
   Adds an element to this tree.
   The element must not already be in a tree.
@@ -758,12 +645,19 @@ class SplayNodeTree extends NodeTree:
     insert_ element (root_ as SplayNode)
     splay_ element
 
+  empty-string_ -> string: return "[]"
+
+abstract
+class SplayNodeTree_ extends NodeTree_:
   /**
   Removes the given element from this tree.
   Equality is determined by object identity ($identical).
   The given element must be in this tree.
   */
   remove element/SplayNode -> none:
+    remove_ element
+
+  remove_ element/SplayNode -> none:
     parent := element.parent_
     assert: parent != null or (identical root_ element)
     assert:
@@ -804,6 +698,29 @@ class SplayNodeTree extends NodeTree:
     assert: element.parent_ == null
     assert: element.left_ == null
     assert: element.right_ == null
+
+  add_ [create] [compare] [overwrite] -> SetSplayNode_:
+    nearest/any := find_ compare
+    if nearest:
+      comparison := compare.call nearest
+      if comparison == 0:
+        // Equal.  Overwrite.
+        overwrite.call nearest
+        splay_ nearest
+        return nearest
+      node := create.call
+      node.parent_ = nearest
+      if comparison > 0:
+        nearest.left_ = node
+      else:
+        nearest.right_ = node
+      size_++
+      splay_ node
+      return node
+    else:
+      root_ = create.call
+      size_ = 1
+      return root_ as SetSplayNode_
 
   insert_ element/SplayNode node/SplayNode -> none:
     while true:
@@ -889,7 +806,7 @@ Since this collection is based on a red-black tree it offers O(log n)
   time for insertion and O(1) amortized time for removal.
 Getting the largest and smallest keys are also O(log n) time operations.
 */
-class RedBlackNodeTree extends NodeTree:
+class RedBlackNodeTree extends RedBlackNodeTree_ with ToListMixin_ CollectionMixin implements Collection:
   /**
   Adds a value to this tree.
   The value must not already be in a tree.
@@ -906,6 +823,27 @@ class RedBlackNodeTree extends NodeTree:
       return
     value.red_ = true
     insert_ value (root_ as any)
+
+  empty-string_ -> string: return "[]"
+
+abstract
+class RedBlackNodeTree_ extends NodeTree_:
+  add_ [create] [compare] [overwrite] -> SetRedBlackNode_:
+    nearest/any := find_ compare
+    if nearest:
+      comparison := compare.call nearest
+      if comparison == 0:
+        // Equal.  Overwrite.
+        overwrite.call nearest
+        return nearest
+      node := create.call
+      insert_ node nearest
+      size_++
+      return node
+    else:
+      root_ = create.call
+      size_ = 1
+      return (root_ as SetRedBlackNode_)
 
   insert_ value/RedBlackNode node/RedBlackNode -> none:
     while true:
@@ -1347,15 +1285,6 @@ class DequeSet extends Deque:
         key
         --binary-compare=: | a b | a.compare-to b
         --if-absent=: return false
-    return true
-
-  /**
-  Whether this instance contains all elements of $collection.
-  The elements of the collection can be lightweight objects that can be passed
-    as a parameter to the compare-to method of keys in this set.
-  */
-  contains-all collection/Collection -> bool:
-    collection.do: if not contains it: return false
     return true
 
 /**

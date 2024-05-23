@@ -33,6 +33,10 @@ main:
   test-lightweight: SplaySet
   test-lightweight: RedBlackSet
   test-lightweight: DequeSet
+  test-not-set Map
+  test-not-set SplayMap
+  test-not-set RedBlackMap
+
   bench false SplayNodeTree "splay": | us/int | SplayTimeout us LAMBDA
   bench false RedBlackNodeTree "red-black": | us/int | RBTimeout us LAMBDA
   bench true SplayNodeTree "splay": | us/int | SplayTimeout us LAMBDA
@@ -266,12 +270,16 @@ test-set-2 [create-set] -> none:
   set.add "foo"
   expect-equals 1 set.size
   expect-equals "{foo}" set.stringify
+  expect-equals "foo" set.first
+  expect-equals "foo" set.last
 
   expect-equals null (set.get "bar")
   expect-equals "fizz" (set.get "bar" --if-absent=: "fizz")
 
   set.add "whizz"
   expect-equals 2 set.size
+  expect-equals "foo" set.first
+  expect-equals "whizz" set.last
 
   expect-equals null (set.get "bar")
   expect-equals "fizz" (set.get "bar" --if-absent=: "fizz")
@@ -474,3 +482,14 @@ bench one-end/bool tree name/string [create-item] -> none:
 
   end := Time.monotonic-us
   print "Time $name $(one-end ? "one-end " : " ")for $SIZE elements: $((end - start) / 1000) us"
+
+test-not-set map:
+  expect map is not Collection
+  map["foo"] = "bar"
+  expect-equals "bar" (map.get "foo")
+  expect-throw "LOOKUP_FAILED":
+    map.to-list
+  expect-throw "LOOKUP_FAILED":
+    map.add "baz"
+  expect-throw "LOOKUP_FAILED":
+    map.add-all ["baz", "fizz"]
