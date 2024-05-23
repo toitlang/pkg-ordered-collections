@@ -21,8 +21,15 @@ main:
   test-set: SplaySet
   test-set: RedBlackSet
   test-set: DequeSet
+  test-set-2: SplaySet
+  test-set-2: RedBlackSet
+  test-set-2: DequeSet
+  test-set-2: Set
   test-map: SplayMap
   test-map: RedBlackMap
+  test-map-2: SplayMap
+  test-map-2: RedBlackMap
+  test-map-2: Map
   test-lightweight: SplaySet
   test-lightweight: RedBlackSet
   test-lightweight: DequeSet
@@ -252,6 +259,30 @@ test-set [create-set] -> none:
   big-string := set.stringify
   expect-equals "83, 830, 831, 832, 833, 834..." big-string[big-string.size - 30..]
 
+test-set-2 [create-set] -> none:
+  set := create-set.call
+
+  expect-equals 0 set.size
+  set.add "foo"
+  expect-equals 1 set.size
+  expect-equals "{foo}" set.stringify
+
+  expect-equals null (set.get "bar")
+  expect-equals "fizz" (set.get "bar" --if-absent=: "fizz")
+
+  set.add "whizz"
+  expect-equals 2 set.size
+
+  expect-equals null (set.get "bar")
+  expect-equals "fizz" (set.get "bar" --if-absent=: "fizz")
+  expect-equals "{foo, whizz}" set.stringify
+
+  set.add-all ["xylophone", "zoo"]
+  expect-equals "{foo, whizz, xylophone, zoo}" set.stringify
+  set.remove "whizz"
+  expect-equals "{foo, xylophone, zoo}" set.stringify
+  expect-equals 3 set.size
+
 test-map [create-map] -> none:
   map := create-map.call
 
@@ -264,8 +295,43 @@ test-map [create-map] -> none:
 
   big-string := map.stringify
   expect-equals "{0: baz, 1: baz, 10: baz, 100:" big-string[..30]
-  expect-equals "..." big-string[big-string.size - 30..]
+  expect-equals ": baz, 1326: baz, 1327: baz..." big-string[big-string.size - 30..]
 
+test-map-2 [create-map] -> none:
+  map := create-map.call
+
+  fisk := map.get "hest" --init=: "fisk"
+  expect-equals "fisk" fisk
+
+  expect-equals "fish"
+      map.get "horse" --if-absent=: "fish"
+
+  expect-equals "FISK"
+      map.get "hest" --if-present=: it.to-ascii-upper
+
+  expect-equals "fish"
+      map.get "horse" --if-absent=(: "fish") --if-present=: it.to-ascii-upper
+
+  expect-equals null
+      map.get "horse"
+
+  map["horse"] = "fish"
+  expect-equals 2 map.size
+  expect-equals "{hest: fisk, horse: fish}" map.stringify
+  map["pferd"] = "fisch"
+  expect-equals 3 map.size
+  expect-equals "{hest: fisk, horse: fish, pferd: fisch}" map.stringify
+  map["pferd"] = "Fisch"
+  expect-equals "{hest: fisk, horse: fish, pferd: Fisch}" map.stringify
+  map.remove "horse"
+  expect-equals 2 map.size
+  expect-equals "{hest: fisk, pferd: Fisch}" map.stringify
+  map.remove "pferd"
+  map["Pferd"] = "Fisch"
+  expect (map.contains "hest")
+  expect-not (map.contains "pferd")
+  expect (map.contains "Pferd")
+  expect-equals 2 map.size
 
 class BoxedString implements Comparable:
   str/string

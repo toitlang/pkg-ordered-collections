@@ -1329,7 +1329,6 @@ class DequeSet extends Deque:
         key
         --binary-compare=: | a b | a.compare-to b
         --if-absent=: | index |
-          print "Adding $key at $index out of $size"
           insert --at=index key
           return
     this[index] = key
@@ -1396,5 +1395,7 @@ class DequeSet extends Deque:
     return result
 
   stringify -> string:
-    square := super
-    return "{$(square[1..square.size - 1])}"
+    square := "{$super[1..]"
+    // If it's not truncated, replace the trailing ] with a }.
+    if square.ends-with "]": square = "$square[.. square.size - 1]}"
+    return square
