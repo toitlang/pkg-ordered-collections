@@ -349,7 +349,12 @@ test-map-2 [create-map] -> none:
   expect-equals "{hest: fisk, horse: fish, pferd: fisch}" map.stringify
   map2 := map.copy
   map3 := map.map: | key value | "$key-$value"
-  map["pferd"] = "Fisch"
+  // Upper-case "fisch" in map.
+  result := map.update "pferd": it[..1].to-ascii-upper + it[1..]
+  expect-equals "Fisch" result
+  expect-throw "key not found": map.update "foo": it
+  while true:
+    map.update "pferd": break
   expect-equals "{hest: fisk, horse: fish, pferd: Fisch}" map.stringify
   expect-equals "{hest: fisk, horse: fish, pferd: fisch}" map2.stringify
   expect-equals "{hest: hest-fisk, horse: horse-fish, pferd: pferd-fisch}" map3.stringify
@@ -413,6 +418,69 @@ test-map-2 [create-map] -> none:
   map.remove "hest"
   expect-equals 0 map.size
   expect-equals "{:}" map.stringify
+
+  // Test update with no blocks.
+  expect-throw "key not found":
+    map.update "kitten": "cat"
+  // Test update with an if-absent block and an update block that is not used.
+  expect-equals "cat"
+      map.update "kitten" --if-absent=(: "cat"): unreachable
+  // Update to the value that was already there.
+  expect-equals "cat"
+      map.update "kitten": it
+  expect-equals map["kitten"] "cat"
+  // Test update with an if-absent value and an update block that is not used.
+  expect-equals "frog"
+      map.update "tadpole" --if-absent="frog": unreachable
+  expect-equals map["tadpole"] "frog"
+  // Test that non-local return from the if-absent block leaves the map
+  // unchanged.
+  while true:
+    map.update "foo" --if-absent=(: break): unreachable
+    unreachable
+  // Update to the value that was already there without calling the if-absent
+  // block.
+  expect-equals "cat"
+      map.update "kitten" --if-absent=(: unreachable): it
+  // Because we added in alphabetical order, both the insert-ordered and the
+  // ordered map should have the same order.
+  expect-equals "{kitten: cat, tadpole: frog}" map.stringify
+  // If the init block does a non-local return, the map is unchanged and the
+  // update block is not called.
+  while true:
+    map.update "caterpillar" --init=(: break): unreachable
+    unreachable
+  expect-equals "{kitten: cat, tadpole: frog}" map.stringify
+  // If the update block does a non-local return then the map is unchanged.
+  // (This contradicts the documentation of Map).
+  while true:
+    map.update "caterpillar" --init=(: "butterfly"): break
+    unreachable
+  expect-not (map.contains "caterpillar")
+  expect-equals "{kitten: cat, tadpole: frog}" map.stringify
+  // Init block is called, updater makes no change.
+  map.update "caterpillar" --init=(: "butterfly"): it
+  expect-equals "butterfly" map["caterpillar"]
+  // Init block is called, updater uppercases the value.
+  map.update "lamb" --init=(: "sheep"): it.to-ascii-upper
+  expect-equals "SHEEP" map["lamb"]
+  // Update, init block not called.
+  map.update "lamb" --init=(: unreachable): it.to-ascii-lower
+  expect-equals "sheep" map["lamb"]
+  // Init value instead of block.
+  map.update "puppy" --init="dog": it
+  expect-equals "dog" map["puppy"]
+  // We have to sort the keys now because the maps we test have different orders.
+  keys := map.keys
+  keys.sort --in-place
+  expect-equals "[caterpillar, kitten, lamb, puppy, tadpole]" keys.stringify
+  str := ""
+  keys.do: str += "$it:$map[it] "
+  expect-equals "caterpillar:butterfly kitten:cat lamb:sheep puppy:dog tadpole:frog " str
+
+  values := map.values
+  values.sort --in-place
+  expect-equals "[butterfly, cat, dog, frog, sheep]" values.stringify
 
 class BoxedString implements Comparable:
   str/string

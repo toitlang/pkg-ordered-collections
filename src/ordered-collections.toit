@@ -391,9 +391,9 @@ class SplaySet extends SplayNodeTree_ with ToListMixin_ CollectionMixin SetMixin
   */
   add key/Comparable -> none:
     add_
-        (: SetSplayNode_ key)
-        (: it.key_.compare-to key)
-        (: | node/SetSplayNode_ | node.key_ = key)
+        --create=: SetSplayNode_ key
+        --compare=: it.key_.compare-to key
+        --overwrite=: | node/SetSplayNode_ | node.key_ = key
 
   do [block] -> none:
     super: block.call it.key_
@@ -457,6 +457,45 @@ mixin SetMapMixin_:
 
   empty-string_ -> string: return "{}"
 
+abstract mixin MapMixin_:
+  abstract update key [updater] [--if-absent]
+  abstract update key [updater] [--init]
+  abstract do [block] -> none
+  abstract do --keys [block] -> none  // Only for doc comment.
+  abstract do --values [block] -> none  // Only for doc comment.
+  abstract size -> int
+
+  update key [updater]:
+    return update key updater --if-absent=: throw "key not found"
+
+  update key [updater] --if-absent:
+    return update key updater --if-absent=: if-absent
+
+  update key [updater] --init:
+    return update key updater --init=: init
+
+  /**
+  Returns the keys of this instance as a list.
+  This operation instantiates a fresh list and is thus in O(n).
+  When possible use $(do --keys [block]) instead.
+  */
+  keys -> List:
+    result := List size
+    i := 0
+    do: | key _ | result[i++] = key
+    return result
+
+  /**
+  Returns the values of this instance as a list.
+  This operation instantiates a fresh list and is thus in O(n).
+  When possible use $(do --values [block]) instead.
+  */
+  values -> List:
+    result := List size
+    i := 0
+    do: | _ value | result[i++] = value
+    return result
+
 /**
 A map of key-value pairs.
 The objects used as keys must be $Comparable and immutable in the sense
@@ -468,7 +507,7 @@ Since this collection bases on a splay tree it is not guaranteed to be
   efficient for all access patterns, but is believed to be efficient in
   practice.
 */
-class SplayMap extends SplayNodeTree_ with SetMapMixin_ MapMixin:
+class SplayMap extends SplayNodeTree_ with SetMapMixin_ MapMixin MapMixin_:
   /**
   Returns the value that corresponds to the given key.
   The $key can be a lightweight object that can be passed as a
@@ -495,10 +534,10 @@ class SplayMap extends SplayNodeTree_ with SetMapMixin_ MapMixin:
     return if-absent.call key
 
   get key [--init]:
-    new-node := add_ 
-        (: MapSplayNode_ key init.call)
-        (: it.key_.compare-to key)
-        (: | node/MapSplayNode_ | return node.value_)
+    new-node := add_
+        --create=: MapSplayNode_ key init.call
+        --compare=: it.key_.compare-to key
+        --overwrite=: | node/MapSplayNode_ | return node.value_
     return (new-node as MapSplayNode_).value_
 
   /**
@@ -509,9 +548,9 @@ class SplayMap extends SplayNodeTree_ with SetMapMixin_ MapMixin:
   */
   operator []= key value -> none:
     add_
-        (: MapSplayNode_ key value)
-        (: it.key_.compare-to key)
-        (: | nearest/MapSplayNode_ | nearest.value_ = value)
+        --create=: MapSplayNode_ key value
+        --compare=: it.key_.compare-to key
+        --overwrite=: | nearest/MapSplayNode_ | nearest.value_ = value
 
   do [block] -> none:
     if root_:
@@ -530,6 +569,30 @@ class SplayMap extends SplayNodeTree_ with SetMapMixin_ MapMixin:
 
   copy -> SplayMap:
     return map: | _ value | value
+
+  update key [updater] [--if-absent]:
+    result := null
+    add_
+      --create=:
+        result = if-absent.call key
+        MapSplayNode_ key result
+      --compare=: it.key_.compare-to key
+      --overwrite=:
+        result = updater.call it.value_
+        it.value_ = result
+    return result
+
+  update key [updater] [--init]:
+    result := null
+    add_
+      --create=:
+        result = updater.call (init.call key)
+        MapSplayNode_ key result
+      --compare=: it.key_.compare-to key
+      --overwrite=:
+        result = updater.call it.value_
+        it.value_ = result
+    return result
 
   empty-string_ -> string: return "{:}"
 
@@ -554,9 +617,9 @@ class RedBlackSet extends RedBlackNodeTree_ with ToListMixin_ CollectionMixin Se
   */
   add key/Comparable -> none:
     add_
-        (: SetRedBlackNode_ key)
-        (: it.key_.compare-to key)
-        (: | node/SetRedBlackNode_ | node.key_ = key)
+        --create=: SetRedBlackNode_ key
+        --compare=: it.key_.compare-to key
+        --overwrite=: | node/SetRedBlackNode_ | node.key_ = key
 
   do [block] -> none:
     super: block.call it.key_
@@ -584,7 +647,7 @@ Since this collection is based on a red-black tree it offers O(log n)
   time for insertion and removal.  Checking for containment and getting
   the largest and smallest keys are also O(log n) time operations.
 */
-class RedBlackMap extends RedBlackNodeTree_ with SetMapMixin_ MapMixin:
+class RedBlackMap extends RedBlackNodeTree_ with SetMapMixin_ MapMixin MapMixin_:
   /**
   Returns the value that corresponds to the given key.
   The $key can be a lightweight object that can be passed as a
@@ -611,10 +674,10 @@ class RedBlackMap extends RedBlackNodeTree_ with SetMapMixin_ MapMixin:
     return if-absent.call key
 
   get key [--init]:
-    new-node := add_ 
-        (: MapRedBlackNode_ key init.call)
-        (: it.key_.compare-to key)
-        (: | node/MapRedBlackNode_ | return node.value_)
+    new-node := add_
+        --create=: MapRedBlackNode_ key init.call
+        --compare=: it.key_.compare-to key
+        --overwrite=: | node/MapRedBlackNode_ | return node.value_
     return (new-node as MapRedBlackNode_).value_
 
   /**
@@ -625,9 +688,9 @@ class RedBlackMap extends RedBlackNodeTree_ with SetMapMixin_ MapMixin:
   */
   operator []= key value -> none:
     add_
-        (: MapRedBlackNode_ key value)
-        (: it.key_.compare-to key)
-        (: | node/MapRedBlackNode_ | node.value_ = value)
+        --create=: MapRedBlackNode_ key value
+        --compare=: it.key_.compare-to key
+        --overwrite=: | node/MapRedBlackNode_ | node.value_ = value
 
   do [block] -> none:
     if root_:
@@ -646,6 +709,30 @@ class RedBlackMap extends RedBlackNodeTree_ with SetMapMixin_ MapMixin:
 
   copy -> RedBlackMap:
     return map: | _ value | value
+
+  update key [updater] [--if-absent]:
+    result := null
+    add_
+      --create=:
+        result = if-absent.call key
+        MapRedBlackNode_ key result
+      --compare=: it.key_.compare-to key
+      --overwrite=:
+        result = updater.call it.value_
+        it.value_ = result
+    return result
+
+  update key [updater] [--init]:
+    result := null
+    add_
+      --create=:
+        result = updater.call (init.call key)
+        MapRedBlackNode_ key result
+      --compare=: it.key_.compare-to key
+      --overwrite=:
+        result = updater.call it.value_
+        it.value_ = result
+    return result
 
   empty-string_ -> string: return "{:}"
 
@@ -733,7 +820,7 @@ class SplayNodeTree_ extends NodeTree_:
     assert: element.left_ == null
     assert: element.right_ == null
 
-  add_ [create] [compare] [overwrite] -> SetSplayNode_:
+  add_ [--create] [--compare] [--overwrite] -> SetSplayNode_:
     nearest/any := find_ compare
     if nearest:
       comparison := compare.call nearest
@@ -862,7 +949,7 @@ class RedBlackNodeTree extends RedBlackNodeTree_ with ToListMixin_ CollectionMix
 
 abstract
 class RedBlackNodeTree_ extends NodeTree_:
-  add_ [create] [compare] [overwrite] -> SetRedBlackNode_:
+  add_ [--create] [--compare] [--overwrite] -> SetRedBlackNode_:
     nearest/any := find_ compare
     if nearest:
       comparison := compare.call nearest
