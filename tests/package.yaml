@@ -1,1 +1,3 @@
-# Toit Package File.
+dependencies:
+  ordered-collections:
+    path: ..
