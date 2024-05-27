@@ -345,6 +345,11 @@ mixin SetMixin_:
 
   abstract find_ [compare] -> TreeNode?
 
+  abstract add key -> none
+
+  add-all collection/Collection -> none:
+    collection.do: add it
+
   /**
   Returns an element that is equal to the $key, according to the
     compare-to method of the elements in the set.
@@ -766,6 +771,9 @@ class SplayNodeTree extends SplayNodeTree_ with ToListMixin_ CollectionMixin imp
     insert_ element (root_ as SplayNode)
     splay_ element
 
+  add-all collection/Collection -> none:
+    collection.do: add it
+
   empty-string_ -> string: return "[]"
 
 abstract
@@ -944,6 +952,9 @@ class RedBlackNodeTree extends RedBlackNodeTree_ with ToListMixin_ CollectionMix
       return
     value.red_ = true
     insert_ value (root_ as any)
+
+  add-all collection/Collection -> none:
+    collection.do: add it
 
   empty-string_ -> string: return "[]"
 
